@@ -503,6 +503,10 @@ abstract final class UnfoldMotion {
 
   /// Moves [controller] toward [open] from where it stands and as fast as it
   /// moves, so a tap during the motion turns it around without a jolt.
+  ///
+  /// When [animate] is false, sets [controller.value] directly; landing on a
+  /// fresh controller's initial `dismissed` status does not notify status
+  /// listeners, so callers must not rely on status callbacks to rebuild.
   static void run(
     AnimationController controller, {
     required bool open,

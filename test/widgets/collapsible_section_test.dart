@@ -289,6 +289,56 @@ void main() {
     controller.stop();
   });
 
+  testWidgets('with animate off UnfoldMotion jumps to target without ticking', (
+    tester,
+  ) async {
+    final controller = AnimationController(vsync: tester, value: 1);
+    addTearDown(controller.dispose);
+
+    UnfoldMotion.run(controller, open: false, animate: false);
+    expect(controller.value, 0);
+    expect(controller.isAnimating, isFalse);
+
+    UnfoldMotion.run(controller, open: true, animate: false);
+    expect(controller.value, 1);
+    expect(controller.isAnimating, isFalse);
+  });
+
+  testWidgets(
+    'removing a group while it unfolds drops its controller cleanly',
+    (tester) async {
+      Future<void> pumpGroups(List<String> labels) => tester.pumpWidget(
+        TestApp(
+          child: Surface(
+            child: CustomScrollView(
+              slivers: [
+                SliverCollapsibleGroups(
+                  groups: [
+                    for (final label in labels)
+                      CollapsibleGroup(key: label, label: label, itemCount: 2),
+                  ],
+                  itemBuilder: (_, group, index) =>
+                      Text('${labels[group]}$index'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await pumpGroups(['a', 'b']);
+      await tester.tap(find.text('b 2'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.hasRunningAnimations, isTrue);
+
+      await pumpGroups(['a']);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(find.text('b0'), findsNothing);
+    },
+  );
+
   testWidgets('builds only the entries in view, open or unfolding', (
     tester,
   ) async {

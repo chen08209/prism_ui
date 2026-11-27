@@ -108,31 +108,31 @@ class _SliverCollapsibleGroupsState extends State<SliverCollapsibleGroups>
   bool _isOpen(Object key, {required bool collapsible}) =>
       !collapsible || widget.initiallyExpanded != _toggled.contains(key);
 
+  void _dropGroup(Object key, {required bool dropKeys}) {
+    if (dropKeys) {
+      _entryKeys.remove(key);
+    }
+    _controllers.remove(key)?.dispose();
+  }
+
   void _move(Object key, {required bool open}) {
+    if (context.disableAnimations) {
+      _dropGroup(key, dropKeys: !open);
+      return;
+    }
     final controller = _controllers[key] ??= AnimationController(
       vsync: this,
       value: open ? 0 : 1,
     )..addStatusListener((status) => _settle(key, status));
-    UnfoldMotion.run(
-      controller,
-      open: open,
-      animate: !context.disableAnimations,
-    );
+    UnfoldMotion.run(controller, open: open);
   }
 
   void _settle(Object key, AnimationStatus status) {
-    if (status.isAnimating) {
+    if (status.isAnimating || !_controllers.containsKey(key)) {
       return;
     }
-    final controller = _controllers.remove(key);
-    if (controller == null) {
-      return;
-    }
-    if (status.isDismissed) {
-      _entryKeys.remove(key);
-    }
+    _dropGroup(key, dropKeys: status.isDismissed);
     setState(() {});
-    controller.dispose();
   }
 
   void _toggle(Object key) {
@@ -148,14 +148,11 @@ class _SliverCollapsibleGroupsState extends State<SliverCollapsibleGroups>
   void didUpdateWidget(SliverCollapsibleGroups oldWidget) {
     super.didUpdateWidget(oldWidget);
     final keys = {for (final group in widget.groups) group.key};
-    _entryKeys.removeWhere((key, _) => !keys.contains(key));
-    _controllers.removeWhere((key, controller) {
-      if (keys.contains(key)) {
-        return false;
+    for (final key in {..._entryKeys.keys, ..._controllers.keys}) {
+      if (!keys.contains(key)) {
+        _dropGroup(key, dropKeys: true);
       }
-      controller.dispose();
-      return true;
-    });
+    }
     if (oldWidget.collapsible == widget.collapsible) {
       return;
     }
@@ -512,16 +509,18 @@ abstract final class UnfoldMotion {
     bool animate = true,
   }) {
     final target = open ? 1.0 : 0.0;
+    if (!animate) {
+      controller.value = target;
+      return;
+    }
     if (!controller.isAnimating && controller.value == target) {
       return;
     }
-    // Without motion it still runs, from the target: setting the value alone
-    // reports no status when it lands on the one a new controller starts with.
     final simulation = SpringSimulation(
       spring,
-      animate ? controller.value : target,
+      controller.value,
       target,
-      animate ? controller.velocity : 0,
+      controller.velocity,
       snapToEnd: true,
       tolerance: _tolerance,
     );

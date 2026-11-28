@@ -14,6 +14,16 @@ class _HeldPage extends StatefulWidget {
 
 class _HeldPageState extends State<_HeldPage>
     with RouteMotionHoldMixin<_HeldPage> {
+  final applied = <String>[];
+
+  void schedule(String label, {Object? key}) {
+    if (key == null) {
+      updateWhenRouteSettled(() => applied.add(label));
+    } else {
+      updateWhenRouteSettled(() => applied.add(label), key: key);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => const Text('held');
 }
@@ -62,5 +72,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(routeOf(tester.element(find.text('pushed'))), same(route));
+  });
+
+  testWidgets('RouteMotionHoldMixin replays each held key independently', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const HostApp(home: _HeldPage()));
+    final state = tester.state<_HeldPageState>(find.byType(_HeldPage));
+    final navigator = Navigator.of(tester.element(find.byType(_HeldPage)));
+
+    navigator.didStartUserGesture();
+    await tester.pump();
+    state.schedule('a1', key: 'a');
+    state.schedule('a2', key: 'a');
+    state.schedule('b1', key: 'b');
+    expect(state.applied, isEmpty);
+
+    navigator.didStopUserGesture();
+    await tester.pump();
+    expect(state.applied, ['a2', 'b1']);
   });
 }

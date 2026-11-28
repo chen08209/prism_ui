@@ -60,30 +60,32 @@ class _RouteMotion {
 bool isRouteMoving(BuildContext context) => _RouteMotion(context).isMoving;
 
 /// Holds list refreshes while the page's route is pushed, popped, covered,
-/// uncovered or dragged back, and replays the latest one once it settles.
+/// uncovered or dragged back, and replays the latest one per key once settled.
 mixin RouteMotionHoldMixin<T extends StatefulWidget> on State<T> {
+  static const _defaultKey = Object();
+
   ModalRoute<Object?>? _route;
   _RouteMotion? _motion;
-  VoidCallback? _heldUpdate;
+  final _heldUpdates = <Object, VoidCallback>{};
   var _settleRun = 0;
   var _settling = false;
 
-  void updateWhenRouteSettled(VoidCallback update) {
+  void updateWhenRouteSettled(VoidCallback update, {Object key = _defaultKey}) {
     if (_settling || (_motion?.isMoving ?? false)) {
-      _heldUpdate = update;
+      _heldUpdates[key] = update;
       return;
     }
-    _heldUpdate = null;
+    _heldUpdates.remove(key);
     update();
   }
 
   /// Applies at once while [ArrivalHold] keeps the push at value zero.
-  void showFirstContent(VoidCallback update) {
+  void showFirstContent(VoidCallback update, {Object key = _defaultKey}) {
     if (_settling || (_motion?.isUnderway ?? false)) {
-      _heldUpdate = update;
+      _heldUpdates[key] = update;
       return;
     }
-    _heldUpdate = null;
+    _heldUpdates.remove(key);
     update();
   }
 
@@ -102,7 +104,7 @@ mixin RouteMotionHoldMixin<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     _detach();
-    _heldUpdate = null;
+    _heldUpdates.clear();
     super.dispose();
   }
 
@@ -144,12 +146,17 @@ mixin RouteMotionHoldMixin<T extends StatefulWidget> on State<T> {
   void _applyHeld() {
     _settleRun++;
     _settling = false;
-    final update = _heldUpdate;
-    if (update == null) {
+    if (_heldUpdates.isEmpty) {
       return;
     }
-    _heldUpdate = null;
-    update();
+    final updates = _heldUpdates.values.toList(growable: false);
+    _heldUpdates.clear();
+    for (final update in updates) {
+      if (!mounted) {
+        return;
+      }
+      update();
+    }
   }
 }
 
